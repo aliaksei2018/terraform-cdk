@@ -7,6 +7,7 @@ import { logger, processLoggerError } from "./logging";
 import * as path from "path";
 import * as fs from "fs-extra";
 import { DISPLAY_VERSION } from "./version";
+import { CHECKPOINT_DISABLE } from "./environment";
 
 const BASE_URL = `https://checkpoint-api.hashicorp.com/v1/`;
 
@@ -138,7 +139,7 @@ information on how to disable it.`
 
 export async function ReportRequest(reportParams: ReportParams): Promise<void> {
   // we won't report when checkpoint is disabled.
-  if (process.env.CHECKPOINT_DISABLE) {
+  if (CHECKPOINT_DISABLE) {
     return;
   }
 
