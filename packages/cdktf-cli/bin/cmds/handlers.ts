@@ -350,3 +350,9 @@ export async function debug(argv: any) {
     });
   }
 }
+
+export async function providerAdd(argv: any) {
+  console.log(chalkColour`{bold {greenBright cdktf provider add}}`);
+  console.log(argv);
+  // TODO: implement
+}
