@@ -1,5 +1,8 @@
 import { Language } from "@cdktf/provider-generator";
+import { ProviderDependencySpec } from "../cdktf-config";
 import { Errors } from "../errors";
+import { logger } from "../logging";
+import { CdktfConfigManager } from "./cdktf-config-manager";
 import { PackageManager } from "./package-manager";
 
 // ref: https://www.terraform.io/language/providers/requirements#source-addresses
@@ -18,7 +21,7 @@ function normalizeProviderSource(source: string) {
   }
 }
 
-class ProviderConstraint {
+export class ProviderConstraint {
   public readonly source: string;
 
   // TODO: parse the version constraint, add examples to cli command description (i.e. =,~>.> etc.)
@@ -26,6 +29,13 @@ class ProviderConstraint {
   // if specific version is specified without e.g. =, we allow patch level increments (e.g. ~>2.12 for "2.12")
   constructor(source: string, public readonly version: string | undefined) {
     this.source = normalizeProviderSource(source);
+  }
+
+  fromConfigEntry(
+    provider: string | ProviderDependencySpec
+  ): ProviderConstraint {
+    throw new Error("not implemented");
+    // TODO: return new ProviderConstraint(...);
   }
 }
 
@@ -48,8 +58,11 @@ export class DependencyManager {
   }
 
   async hasPrebuiltProvider(constraint: ProviderConstraint): Promise<boolean> {
+    logger.debug(
+      `determining whether pre-built provider exists for ${constraint.source} with version constraint ${constraint.version} and cdktf version ${this.cdktfVersion}`
+    );
+
     // TODO: query NPM for this, add layer that queries this and also caches calls a bit, so we don't have to query NPM every time
-    constraint;
     // Go has no pre-built providers at the moment
     if (this.targetLanguage === Language.GO) {
       return false;
@@ -59,7 +72,10 @@ export class DependencyManager {
   }
 
   async addPrebuiltProvider(constraint: ProviderConstraint) {
-    constraint;
+    logger.debug(
+      `adding pre-built provider ${constraint.source} with version constraint ${constraint.version} for cdktf version ${this.cdktfVersion}`
+    );
+
     if (this.targetLanguage === Language.GO) {
       throw Errors.Usage(
         "There are no pre-built providers published for Go at the moment. See https://github.com/hashicorp/terraform-cdk/issues/723"
@@ -68,10 +84,10 @@ export class DependencyManager {
 
     const packageName = this.convertPackageName(constraint.source);
     // TODO: determine version of pre-built provider package that matches provider version constraint
-    // uses:
-    this.cdktfVersion;
+    // uses: this.cdktfVersion
+    const packageVersion = undefined; // TODO: set the exact version to be used, or allow patch level increments?
 
-    this.packageManager.addPackage(); // TODO: convert name of package to target language
+    this.packageManager.addPackage(packageName, packageVersion);
     packageName;
 
     // TODO: add prebuilt provider, throw error if it does not exist
@@ -79,9 +95,13 @@ export class DependencyManager {
   }
 
   async addLocalProvider(constraint: ProviderConstraint) {
-    constraint;
-    // TODO: add local provider, determine latest version if no version is set (set to e.g. ~> 2.0), (run get afterwards?)
-    // add to cdktf.json file
+    logger.debug(
+      `adding local provider ${constraint.source} with version constraint ${constraint.version}`
+    );
+
+    // TODO: set constraint.version to latest version if no version is set
+
+    new CdktfConfigManager().addProvider(constraint);
   }
 
   /**

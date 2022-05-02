@@ -40,12 +40,18 @@ import {
   checkEnvironment,
   verifySimilarLibraryVersion,
 } from "./helper/check-environment";
-import { collectDebugInformation } from "../../lib/debug";
+import { collectDebugInformation, getPackageVersion } from "../../lib/debug";
+import {
+  DependencyManager,
+  ProviderConstraint,
+} from "../../lib/dependencies/dependency-manager";
+import { CdktfConfig } from "../../lib/cdktf-config";
 
 const chalkColour = new chalk.Instance();
 const config = cfg.readConfigSync();
 
 async function getProviderRequirements(provider: string[]) {
+  // TODO: replace with CdktfConfig calls
   const items: string[] = provider;
   const cdktfJsonPath = findFileAboveCwd("cdktf.json");
   if (cdktfJsonPath) {
@@ -353,6 +359,18 @@ export async function debug(argv: any) {
 
 export async function providerAdd(argv: any) {
   console.log(chalkColour`{bold {greenBright cdktf provider add}}`);
-  console.log(argv);
-  // TODO: implement
+
+  const language = CdktfConfig.read().language;
+  const cdktfVersion = await getPackageVersion(language, "cdktf");
+
+  if (!cdktfVersion) throw Errors.External("Could not determine cdktf version"); // TODO: allow this? Only use local then?
+
+  const manager = new DependencyManager(language, cdktfVersion);
+
+  const constraint = new ProviderConstraint(
+    argv.provider,
+    argv.versionConstraint
+  );
+
+  manager.addProvider(constraint);
 }

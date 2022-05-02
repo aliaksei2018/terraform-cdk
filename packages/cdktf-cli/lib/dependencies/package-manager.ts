@@ -18,8 +18,12 @@ export abstract class PackageManager {
     }
   }
 
-  public abstract addPackage(): Promise<void>;
+  public abstract addPackage(
+    packageName: string,
+    packageVersion?: string
+  ): Promise<void>;
   // public abstract listPackages(): Promise<todo>; future stuff..
+  // add check if package exists already. might query version in the future and offer to upgrade?
 }
 
 class NodePackageManager extends PackageManager {
