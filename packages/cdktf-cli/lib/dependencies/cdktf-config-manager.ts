@@ -8,13 +8,20 @@ export class CdktfConfigManager {
   private config: CdktfConfig = CdktfConfig.read();
 
   public async hasProvider(constraint: ProviderConstraint): Promise<boolean> {
-    // TODO: implement
-
-    return false;
+    return this.config.terraformProviders.some(
+      (provider) =>
+        ProviderConstraint.fromConfigEntry(provider).source ===
+        constraint.source
+    );
   }
 
   public async addProvider(constraint: ProviderConstraint): Promise<void> {
-    const currentProviders = this.config.terraformProviders;
+    // excluding the constraint to be added (if it already existed)
+    const currentProviders = this.config.terraformProviders.filter(
+      (provider) =>
+        ProviderConstraint.fromConfigEntry(provider).source !==
+        constraint.source
+    );
 
     const simplifiedSource = constraint.source.replace(
       "registry.terraform.io/",
@@ -23,8 +30,6 @@ export class CdktfConfigManager {
 
     const provider =
       simplifiedSource + (constraint.version ? `@${constraint.version}` : "");
-
-    // TODO: check if provider exists already, if yes replace it
 
     currentProviders.push(provider);
     this.config.writeTerraformProviders(currentProviders);

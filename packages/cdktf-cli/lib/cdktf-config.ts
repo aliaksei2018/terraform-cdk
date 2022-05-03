@@ -3,7 +3,12 @@ import { Language } from "@cdktf/provider-generator";
 import { findFileAboveCwd } from "../bin/cmds/helper/utilities";
 import { Errors } from "./errors";
 
-export type ProviderDependencySpec = unknown; // TODO: define type that we allow here as well
+export type ProviderDependencySpec = {
+  name: string;
+  source: string;
+  version?: string;
+  namespace?: string;
+};
 
 // TODO: move this to some common package from where it is used by @cdktf/provider-generator, cdktf, and cdktf-cli
 // (might end up in cdktf)

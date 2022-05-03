@@ -27,7 +27,11 @@ export abstract class PackageManager {
 }
 
 class NodePackageManager extends PackageManager {
-  public addPackage(): Promise<void> {
+  public addPackage(
+    packageName: string,
+    packageVersion?: string
+  ): Promise<void> {
+    console.log(`Adding package ${packageName} @ ${packageVersion}`);
     throw new Error("Method not implemented.");
   }
 }

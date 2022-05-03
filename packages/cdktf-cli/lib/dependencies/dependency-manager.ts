@@ -4,6 +4,9 @@ import { Errors } from "../errors";
 import { logger } from "../logging";
 import { CdktfConfigManager } from "./cdktf-config-manager";
 import { PackageManager } from "./package-manager";
+import { getPrebuiltProviderVersion } from "./prebuilt-providers";
+import { getLatestVersion } from "./registry-api";
+import { versionMatchesConstraint } from "./version-constraints";
 
 // ref: https://www.terraform.io/language/providers/requirements#source-addresses
 const DEFAULT_HOSTNAME = "registry.terraform.io";
@@ -22,6 +25,10 @@ function normalizeProviderSource(source: string) {
 }
 
 export class ProviderConstraint {
+  /**
+   * normalized source of the provider
+   * e.g. "registry.terraform.io/hashicorp/aws"
+   */
   public readonly source: string;
 
   // TODO: parse the version constraint, add examples to cli command description (i.e. =,~>.> etc.)
@@ -31,11 +38,59 @@ export class ProviderConstraint {
     this.source = normalizeProviderSource(source);
   }
 
-  fromConfigEntry(
+  static fromConfigEntry(
     provider: string | ProviderDependencySpec
   ): ProviderConstraint {
-    throw new Error("not implemented");
-    // TODO: return new ProviderConstraint(...);
+    if (typeof provider === "string") {
+      const [src, version] = provider.split("@");
+      return new ProviderConstraint(src, version);
+    }
+
+    const src =
+      (provider.namespace ? `${provider.namespace}/` : "") +
+      (provider.source || provider.name);
+
+    return new ProviderConstraint(src, provider.version);
+  }
+
+  public isFromTerraformRegistry(): boolean {
+    return this.hostname === DEFAULT_HOSTNAME;
+  }
+
+  /**
+   * the namespace of the provider
+   * e.g. "hashicorp" or "kreuzwerker"
+   */
+  public get namespace(): string {
+    return this.source.split("/")[1];
+  }
+
+  /**
+   * the name of the provider
+   * e.g. "aws"
+   */
+  public get name(): string {
+    return this.source.split("/")[2];
+  }
+
+  /**
+   * the hostname of the provider
+   * e.g. "registry.terraform.io"
+   */
+  public get hostname(): string {
+    return this.source.split("/")[0];
+  }
+
+  /**
+   * checks if the version constraint matches the given version
+   * @param version an actual version (e.g. "4.12.1")
+   * @returns true if the version is compatible with the constraint
+   */
+  public matchesVersion(version: string): boolean {
+    if (this.version) {
+      return versionMatchesConstraint(version, this.version);
+    }
+    return true;
   }
 }
 
@@ -68,7 +123,9 @@ export class DependencyManager {
       return false;
     }
 
-    return Promise.resolve(false);
+    const v = await getPrebuiltProviderVersion(constraint);
+
+    return !!v;
   }
 
   async addPrebuiltProvider(constraint: ProviderConstraint) {
@@ -83,15 +140,21 @@ export class DependencyManager {
     }
 
     const packageName = this.convertPackageName(constraint.source);
-    // TODO: determine version of pre-built provider package that matches provider version constraint
-    // uses: this.cdktfVersion
-    const packageVersion = undefined; // TODO: set the exact version to be used, or allow patch level increments?
+    // FIXME: also use this.cdktfVersion
+    const prebuiltProviderVersion = await getPrebuiltProviderVersion(
+      constraint
+    );
+    if (!prebuiltProviderVersion) {
+      throw Errors.Usage(
+        `No pre-built provider found for ${constraint.source} with version constraint ${constraint.version}`
+      );
+    }
+
+    const packageVersion = prebuiltProviderVersion; // TODO: allow patch level increments as that is what we allow in between CDKTF releases?
 
     this.packageManager.addPackage(packageName, packageVersion);
-    packageName;
 
-    // TODO: add prebuilt provider, throw error if it does not exist
-    // installs package based on target language
+    // TODO: more debug logs
   }
 
   async addLocalProvider(constraint: ProviderConstraint) {
@@ -99,7 +162,14 @@ export class DependencyManager {
       `adding local provider ${constraint.source} with version constraint ${constraint.version}`
     );
 
-    // TODO: set constraint.version to latest version if no version is set
+    if (!constraint.version && constraint.isFromTerraformRegistry()) {
+      const v = await getLatestVersion(constraint);
+      constraint = new ProviderConstraint(
+        constraint.source,
+        // "1.3.2" -> "~> 1.3"
+        `~> ${v.split(".").slice(0, 2).join(".")}`
+      );
+    }
 
     new CdktfConfigManager().addProvider(constraint);
   }
