@@ -12,7 +12,9 @@ type VersionsReturnType = {
   }[];
 };
 
-async function fetchVersions(constraint: ProviderConstraint) {
+async function fetchVersions(
+  constraint: ProviderConstraint
+): Promise<VersionsReturnType["versions"] | null> {
   const proxy = process.env.http_proxy || process.env.HTTP_PROXY;
   let agent;
   if (proxy) {
@@ -21,26 +23,36 @@ async function fetchVersions(constraint: ProviderConstraint) {
   const url = `https://registry.terraform.io/v1/providers/${constraint.namespace}/${constraint.name}/versions`;
 
   const result = await fetch(url, { agent });
-  const json = (await result.json()) as VersionsReturnType;
+  if (!result.ok) {
+    // TODO: throw error if not 404
+    return null;
+  }
 
+  const json = (await result.json()) as VersionsReturnType;
   return json.versions;
 }
 
 /**
  * returns the latest available version for the provider in the constraint
  * the version of the constraint is ignored
+ * returns null, if the provider does not exist
  */
 export async function getLatestVersion(
   constraint: ProviderConstraint
-): Promise<string> {
-  const versions = (await fetchVersions(constraint)).map((v) => v.version);
+): Promise<string | null> {
+  const versions = await fetchVersions(constraint);
+  if (!versions) {
+    return null;
+  }
 
-  const latestVersion = versions.reduce((acc, curr) => {
-    if (semver.gte(acc, curr)) {
-      return acc;
-    }
-    return curr;
-  });
+  const latestVersion = versions
+    .map((v) => v.version)
+    .reduce((acc, curr) => {
+      if (semver.gte(acc, curr)) {
+        return acc;
+      }
+      return curr;
+    });
 
   return latestVersion;
 }

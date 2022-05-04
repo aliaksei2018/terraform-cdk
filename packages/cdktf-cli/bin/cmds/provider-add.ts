@@ -18,6 +18,10 @@ class Command extends BaseCommand {
       .positional("version-constraint", {
         type: "string",
         desc: "optional version constraint",
+      })
+      .option("force-local", {
+        type: "boolean",
+        desc: "force local provider installation, even if pre-built provider exists",
       });
 
   public async handleCommand(argv: any) {

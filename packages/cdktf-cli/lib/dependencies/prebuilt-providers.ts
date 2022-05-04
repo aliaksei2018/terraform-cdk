@@ -18,7 +18,7 @@ type ProvidersMap = {
   [name: string]: string;
 };
 
-async function getNpmPackageName(
+export async function getNpmPackageName(
   constraint: ProviderConstraint
 ): Promise<string | undefined> {
   const providers = (await (
@@ -75,7 +75,7 @@ async function getPrebuiltProviderVersions(
   const url = `https://registry.npmjs.org/${packageName}`;
   const result = (await (
     await fetch(url, { agent })
-  ).json()) as NpmPackageResult;
+  ).json()) as NpmPackageResult; // TODO: handle 404 and other errors (abort on other errors)
 
   const versions = Object.entries(result.versions)
     .map(([version, packageJson]) => {

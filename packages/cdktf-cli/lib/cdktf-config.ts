@@ -2,6 +2,8 @@ import * as fs from "fs";
 import { Language } from "@cdktf/provider-generator";
 import { findFileAboveCwd } from "../bin/cmds/helper/utilities";
 import { Errors } from "./errors";
+import path from "path";
+import { logger } from "./logging";
 
 export type ProviderDependencySpec = {
   name: string;
@@ -64,6 +66,10 @@ export class CdktfConfig {
     this.writeCdktfConfig(cdktfConfig);
   }
 
+  public get projectDirectory(): string {
+    return path.dirname(this.cdktfConfigPath);
+  }
+
   public static read(path: string = process.cwd()): CdktfConfig {
     const cdktfConfigPath = findFileAboveCwd("cdktf.json", path);
     if (!cdktfConfigPath) {
@@ -71,7 +77,7 @@ export class CdktfConfig {
         "Could not find cdktf.json. Make sure there is a cdktf.json file in the current directory or one of its parents."
       );
     }
-    console.log(`cdktf.json found at ${cdktfConfigPath}`);
+    logger.trace(`cdktf.json found at ${cdktfConfigPath}`);
 
     return new CdktfConfig(cdktfConfigPath);
   }

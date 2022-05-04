@@ -358,19 +358,27 @@ export async function debug(argv: any) {
 }
 
 export async function providerAdd(argv: any) {
-  console.log(chalkColour`{bold {greenBright cdktf provider add}}`);
+  const config = CdktfConfig.read();
 
-  const language = CdktfConfig.read().language;
+  const language = config.language;
   const cdktfVersion = await getPackageVersion(language, "cdktf");
 
   if (!cdktfVersion) throw Errors.External("Could not determine cdktf version"); // TODO: allow this? Only use local then?
 
-  const manager = new DependencyManager(language, cdktfVersion);
+  const manager = new DependencyManager(
+    language,
+    cdktfVersion,
+    config.projectDirectory
+  );
 
   const constraint = new ProviderConstraint(
     argv.provider,
     argv.versionConstraint
   );
 
-  manager.addProvider(constraint);
+  if (argv.forceLocal) {
+    await manager.addLocalProvider(constraint);
+  } else {
+    await manager.addProvider(constraint);
+  }
 }

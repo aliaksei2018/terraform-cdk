@@ -4,7 +4,10 @@ import { Errors } from "../errors";
 import { logger } from "../logging";
 import { CdktfConfigManager } from "./cdktf-config-manager";
 import { PackageManager } from "./package-manager";
-import { getPrebuiltProviderVersion } from "./prebuilt-providers";
+import {
+  getNpmPackageName,
+  getPrebuiltProviderVersion,
+} from "./prebuilt-providers";
 import { getLatestVersion } from "./registry-api";
 import { versionMatchesConstraint } from "./version-constraints";
 
@@ -82,6 +85,17 @@ export class ProviderConstraint {
   }
 
   /**
+   * returns a simplified provider name, dropping namespace and hostname
+   * if they match the defaults
+   */
+  public get simplifiedName(): string {
+    return this.source
+      .split("/")
+      .filter((part) => part !== DEFAULT_HOSTNAME && part !== DEFAULT_NAMESPACE)
+      .join("/");
+  }
+
+  /**
    * checks if the version constraint matches the given version
    * @param version an actual version (e.g. "4.12.1")
    * @returns true if the version is compatible with the constraint
@@ -94,14 +108,21 @@ export class ProviderConstraint {
   }
 }
 
+/**
+ * manages dependencies of a CDKTF project (e.g. terraform providers)
+ */
 export class DependencyManager {
   private packageManager: PackageManager;
 
   constructor(
     private readonly targetLanguage: Language,
-    private cdktfVersion: string
+    private cdktfVersion: string,
+    private readonly projectDirectory: string
   ) {
-    this.packageManager = PackageManager.forLanguage(targetLanguage);
+    this.packageManager = PackageManager.forLanguage(
+      targetLanguage,
+      this.projectDirectory
+    );
   }
 
   async addProvider(constraint: ProviderConstraint) {
@@ -117,15 +138,30 @@ export class DependencyManager {
       `determining whether pre-built provider exists for ${constraint.source} with version constraint ${constraint.version} and cdktf version ${this.cdktfVersion}`
     );
 
-    // TODO: query NPM for this, add layer that queries this and also caches calls a bit, so we don't have to query NPM every time
-    // Go has no pre-built providers at the moment
+    console.log(`Checking whether pre-built provider exists for the following constraints:
+  provider: ${constraint.simplifiedName}
+  version : ${constraint.version || "latest"}
+  language: ${this.targetLanguage}
+  cdktf   : ${this.cdktfVersion}
+`);
+
     if (this.targetLanguage === Language.GO) {
+      console.log(
+        `There are no pre-built providers published for Go at the moment. See https://github.com/hashicorp/terraform-cdk/issues/723`
+      );
       return false;
     }
 
     const v = await getPrebuiltProviderVersion(constraint);
+    const exists = v !== undefined;
 
-    return !!v;
+    console.log(
+      `Pre-built provider ${
+        exists ? "does" : "does not"
+      } exist for the given constraints.`
+    );
+
+    return exists;
   }
 
   async addPrebuiltProvider(constraint: ProviderConstraint) {
@@ -139,7 +175,15 @@ export class DependencyManager {
       );
     }
 
-    const packageName = this.convertPackageName(constraint.source);
+    const npmPackageName = await getNpmPackageName(constraint);
+
+    if (!npmPackageName) {
+      throw Errors.Usage(
+        `Could not find pre-built provider for ${constraint.source}`
+      );
+    }
+
+    const packageName = this.convertPackageName(npmPackageName);
     // FIXME: also use this.cdktfVersion
     const prebuiltProviderVersion = await getPrebuiltProviderVersion(
       constraint
@@ -164,11 +208,13 @@ export class DependencyManager {
 
     if (!constraint.version && constraint.isFromTerraformRegistry()) {
       const v = await getLatestVersion(constraint);
-      constraint = new ProviderConstraint(
-        constraint.source,
-        // "1.3.2" -> "~> 1.3"
-        `~> ${v.split(".").slice(0, 2).join(".")}`
-      );
+      if (v) {
+        constraint = new ProviderConstraint(
+          constraint.source,
+          // "1.3.2" -> "~> 1.3"
+          `~> ${v.split(".").slice(0, 2).join(".")}`
+        );
+      }
     }
 
     new CdktfConfigManager().addProvider(constraint);
